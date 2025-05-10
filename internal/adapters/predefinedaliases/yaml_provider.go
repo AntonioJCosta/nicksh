@@ -21,9 +21,9 @@ type YAMLProvider struct {
 }
 
 // NewYAMLProvider creates a new YAMLProvider.
-// The filePath argument could be removed if you only use embedded,
-// or kept if you want to allow overriding the embedded file with a local one.
-// For simplicity, let's assume we primarily use the embedded one.
+// This implementation does not support local file overrides and always uses
+// the embedded YAML file for predefined aliases. The filePath argument is not used.
+// Future maintainers should update this function if local file overrides are needed.
 func NewYAMLProvider() (ports.PredefinedAliasProvider, error) {
 	// No filePath needed if always using embedded
 	return &YAMLProvider{}, nil
