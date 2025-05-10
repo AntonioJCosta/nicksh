@@ -10,6 +10,7 @@ import (
 var rootCmd *cobra.Command
 
 func NewRootCommand(
+	version string,
 	suggestionService ports.AliasSuggestionService,
 	managementService ports.AliasManagementService,
 ) *cobra.Command {
@@ -18,6 +19,7 @@ func NewRootCommand(
 		Short: "nicksh helps you find and manage shell aliases.",
 		Long: `nicksh analyzes your command history to suggest useful aliases
 and provides tools to manage them in your shell configuration.`,
+		Version: version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if suggestionService == nil && (cmd.Name() == "suggest" || cmd.Name() == "add" || cmd.Name() == "add-predefined") {
 				return fmt.Errorf("alias suggestion service not initialized for command %s", cmd.Name())
