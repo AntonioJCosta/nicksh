@@ -1,0 +1,15 @@
+# This YAML file contains a list of predefined command aliases for various tasks.
+
+# Git aliases
+
+- command: "git status"
+  alias: "gs"
+
+- command: "git checkout"
+  alias: "gc"
+
+- command: "git commit -m"
+  alias: "gcm"
+
+- command: "git pull origin main"
+  alias: "gpom"
