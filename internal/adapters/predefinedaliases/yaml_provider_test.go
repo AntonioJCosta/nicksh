@@ -1,8 +1,6 @@
 package predefinedaliases
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,195 +8,130 @@ import (
 	"github.com/AntonioJCosta/nicksh/internal/core/domain/alias"
 )
 
-// Helper function to create a temporary YAML file for testing.
-func createTempYAMLFile(t *testing.T, content string) string {
-	t.Helper()
-	tempFile, err := os.CreateTemp(t.TempDir(), "test_aliases-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	if _, err := tempFile.WriteString(content); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
-	if err := tempFile.Close(); err != nil {
-		t.Fatalf("Failed to close temp file: %v", err)
-	}
-	return tempFile.Name()
-}
-
 func TestNewYAMLProvider(t *testing.T) {
-	tests := []struct {
-		name        string
-		filePath    string
-		wantErr     bool
-		expectedErr string
-	}{
-		{
-			name:     "valid file path",
-			filePath: "aliases.yaml",
-			wantErr:  false,
-		},
-		{
-			name:        "empty file path",
-			filePath:    "",
-			wantErr:     true,
-			expectedErr: "YAML file path cannot be empty",
-		},
+	provider, err := NewYAMLProvider()
+
+	if err != nil {
+		t.Errorf("NewYAMLProvider() unexpected error = %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewYAMLProvider(tt.filePath)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewYAMLProvider() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if tt.wantErr {
-				if err.Error() != tt.expectedErr {
-					t.Errorf("NewYAMLProvider() error = %q, want %q", err.Error(), tt.expectedErr)
-				}
-				if provider != nil {
-					t.Errorf("NewYAMLProvider() expected nil provider on error, got %v", provider)
-				}
-			} else {
-				if provider == nil {
-					t.Errorf("NewYAMLProvider() expected non-nil provider, got nil")
-				}
-				yp, ok := provider.(*YAMLProvider)
-				if !ok {
-					t.Errorf("NewYAMLProvider() did not return a *YAMLProvider")
-				}
-				if yp.filePath != tt.filePath {
-					t.Errorf("NewYAMLProvider() filePath = %q, want %q", yp.filePath, tt.filePath)
-				}
-			}
-		})
+	if provider == nil {
+		t.Errorf("NewYAMLProvider() expected non-nil provider, got nil")
+	}
+	if _, ok := provider.(*YAMLProvider); !ok {
+		t.Errorf("NewYAMLProvider() did not return a *YAMLProvider, got %T", provider)
 	}
 }
 
 func TestYAMLProvider_GetPredefinedAliases(t *testing.T) {
-	validAliasesContent := `
-- command: g
-  alias: git
-- command: k
-  alias: kubectl
+	// Ensure these YAML structures match the fields in alias.Alias (name, command, description)
+	validAliasesYAML := `
+- command: git
+  alias: g
+- command: kubectl
+  alias: k
 `
 	expectedValidAliases := []alias.Alias{
-		{Name: "git", Command: "g"},
-		{Name: "kubectl", Command: "k"},
+		{Name: "g", Command: "git"},
+		{Name: "k", Command: "kubectl"},
 	}
 
-	emptyListContent := `[]`
-	emptyFileContent := ``
-	malformedContent := `
+	emptyListYAML := `[]`
+	emptyContentYAML := `` // Represents an empty embedded file (0 bytes)
+	malformedContentWithExtraFieldYAML := `
 - name: g
   command: git
-  description: git alias
-  invalid_field: oops
+  invalid_field: "this should cause an error with KnownFields(true)" # Explains the malformed nature
 `
-	invalidYAMLContent := `name: g command: git` // Not valid YAML list structure
+	invalidYAMLStructure := `name: g command: git` // Not a valid YAML list
+
+	// Store the original value of the package-level embeddedPredefinedAliases.
+	// This is important for test isolation, especially if tests run in an environment
+	// where it might have been populated by a previous build step.
+	originalEmbeddedData := embeddedPredefinedAliases
 
 	tests := []struct {
-		name           string
-		setupFile      func(t *testing.T) string // Returns the path to the file
-		wantAliases    []alias.Alias
-		wantErr        bool
-		wantErrorMsg   string
-		checkErrorType func(err error) bool // Optional: for specific error types like os.IsNotExist
+		name                string
+		contentToEmbed      []byte
+		wantAliases         []alias.Alias
+		wantErr             bool
+		wantErrorMsgSnippet string // A snippet of the expected error message if wantErr is true
 	}{
 		{
-			name: "file does not exist",
-			setupFile: func(t *testing.T) string {
-				return filepath.Join(t.TempDir(), "non_existent.yaml")
-			},
-			wantAliases: []alias.Alias{}, // Expect empty slice, not nil
-			wantErr:     false,
+			name:           "embedded content is nil (simulates no file linked or empty at compile time)",
+			contentToEmbed: nil, // This will result in len(embeddedPredefinedAliases) == 0
+			wantAliases:    []alias.Alias{},
+			wantErr:        false,
 		},
 		{
-			name: "empty YAML file (empty content)",
-			setupFile: func(t *testing.T) string {
-				return createTempYAMLFile(t, emptyFileContent)
-			},
-			wantAliases: []alias.Alias{}, // Expect empty slice, not nil
-			wantErr:     false,
+			name:           "embedded content is empty string (0 bytes)",
+			contentToEmbed: []byte(emptyContentYAML),
+			wantAliases:    []alias.Alias{},
+			wantErr:        false,
 		},
 		{
-			name: "empty YAML list",
-			setupFile: func(t *testing.T) string {
-				return createTempYAMLFile(t, emptyListContent)
-			},
-			wantAliases: []alias.Alias{}, // Expect empty slice, not nil
-			wantErr:     false,
+			name:           "embedded content is an empty YAML list",
+			contentToEmbed: []byte(emptyListYAML),
+			wantAliases:    []alias.Alias{},
+			wantErr:        false,
 		},
 		{
-			name: "valid aliases file",
-			setupFile: func(t *testing.T) string {
-				return createTempYAMLFile(t, validAliasesContent)
-			},
-			wantAliases: expectedValidAliases,
-			wantErr:     false,
+			name:           "valid aliases embedded",
+			contentToEmbed: []byte(validAliasesYAML),
+			wantAliases:    expectedValidAliases,
+			wantErr:        false,
 		},
 		{
-			name: "malformed YAML content (extra field)",
-			setupFile: func(t *testing.T) string {
-				return createTempYAMLFile(t, malformedContent)
-			},
-			wantAliases:  nil,
-			wantErr:      true,
-			wantErrorMsg: "failed to unmarshal predefined aliases",
+			name:                "malformed YAML content (extra field with KnownFields=true)",
+			contentToEmbed:      []byte(malformedContentWithExtraFieldYAML),
+			wantAliases:         nil, // On error, expect nil aliases
+			wantErr:             true,
+			wantErrorMsgSnippet: "failed to unmarshal embedded predefined aliases",
 		},
 		{
-			name: "invalid YAML structure",
-			setupFile: func(t *testing.T) string {
-				return createTempYAMLFile(t, invalidYAMLContent)
-			},
-			wantAliases:  nil,
-			wantErr:      true,
-			wantErrorMsg: "failed to unmarshal predefined aliases",
-		},
-		{
-			name: "file is a directory",
-			setupFile: func(t *testing.T) string {
-				dirPath := filepath.Join(t.TempDir(), "iamadirectory.yaml")
-				err := os.Mkdir(dirPath, 0755)
-				if err != nil {
-					t.Fatalf("Failed to create directory for test: %v", err)
-				}
-				return dirPath
-			},
-			wantAliases:  nil,
-			wantErr:      true,
-			wantErrorMsg: "failed to read predefined aliases file", // os.ReadFile will error
+			name:                "invalid YAML structure (not a list)",
+			contentToEmbed:      []byte(invalidYAMLStructure),
+			wantAliases:         nil, // On error, expect nil aliases
+			wantErr:             true,
+			wantErrorMsgSnippet: "failed to unmarshal embedded predefined aliases",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filePath := tt.setupFile(t)
-			provider, _ := NewYAMLProvider(filePath) // Assume NewYAMLProvider is correct from previous tests
+			// Set the package-level variable for this specific test case
+			embeddedPredefinedAliases = tt.contentToEmbed
+			// Ensure the original value is restored after this test case finishes for test isolation
+			t.Cleanup(func() {
+				embeddedPredefinedAliases = originalEmbeddedData
+			})
+
+			provider, err := NewYAMLProvider()
+			if err != nil {
+				t.Fatalf("NewYAMLProvider() failed unexpectedly: %v", err)
+			}
 
 			aliases, err := provider.GetPredefinedAliases()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetPredefinedAliases() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				return // Important to return if error expectation is mismatched
 			}
+
 			if tt.wantErr {
-				if !strings.Contains(err.Error(), tt.wantErrorMsg) {
-					t.Errorf("GetPredefinedAliases() error = %q, want to contain %q", err.Error(), tt.wantErrorMsg)
+				if tt.wantErrorMsgSnippet == "" {
+					t.Errorf("GetPredefinedAliases() wantErrorMsgSnippet is empty for an error case")
+				} else if !strings.Contains(err.Error(), tt.wantErrorMsgSnippet) {
+					t.Errorf("GetPredefinedAliases() error = %q, want error to contain %q", err.Error(), tt.wantErrorMsgSnippet)
 				}
-			} else {
-				if tt.wantAliases == nil && aliases != nil && len(aliases) == 0 {
-				} else if !reflect.DeepEqual(aliases, tt.wantAliases) {
-					t.Errorf("GetPredefinedAliases() aliases = %v, want %v", aliases, tt.wantAliases)
+				// When an error is expected, the returned aliases should ideally be nil
+				if aliases != nil {
+					t.Errorf("GetPredefinedAliases() expected nil aliases on error, got %#v", aliases)
 				}
 			}
 
-			if tt.checkErrorType != nil {
-				if !tt.checkErrorType(err) {
-					t.Errorf("GetPredefinedAliases() error type check failed for error: %v", err)
-				}
+			// reflect.DeepEqual handles nil slices and empty slices correctly.
+			if !reflect.DeepEqual(aliases, tt.wantAliases) {
+				t.Errorf("GetPredefinedAliases() aliases = %#v, want %#v", aliases, tt.wantAliases)
 			}
 		})
 	}
