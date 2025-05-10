@@ -13,14 +13,16 @@ jobs:
     name: Run Tests via Reusable Workflow
     uses: ./.github/workflows/test.yaml
 
-  build-and-release:
-    name: Build and Release
+  build:
+    name: Build Application
     needs: call-test-workflow
     runs-on: ubuntu-latest
     strategy:
       matrix:
         goos: [linux, darwin]
         goarch: [amd64, arm64]
+    outputs:
+      version: ${{ steps.git_version.outputs.version }} # Pass version if needed by other jobs
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -47,11 +49,33 @@ jobs:
           APP_VERSION: ${{ steps.git_version.outputs.version }}
         run: ./.github/scripts/build_app.sh
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nicksh-artifact-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cmd/nicksh/nicksh-${{ matrix.goos }}-${{ matrix.goarch }}-${{ steps.git_version.outputs.version }}.tar.gz
+          retention-days: 1
+
+  create-release:
+    name: Create Release and Upload Assets
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') # Ensure this job only runs for tags
+    steps:
+      - name: Checkout code 
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: cmd/nicksh/*.tar.gz
+          files: dist-artifacts/*/*.tar.gz # Glob pattern to find all tar.gz files in the downloaded artifact subdirectories
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
