@@ -1,0 +1,57 @@
+name: Release Go CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  call-test-workflow:
+    name: Run Tests via Reusable Workflow
+    uses: ./.github/workflows/test.yaml
+
+  build-and-release:
+    name: Build and Release
+    needs: call-test-workflow
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Go version from go.mod
+        id: go_version_reader
+        run: echo "go_version_output=$(grep -E '^go [0-9]+\.[0-9]+(\.[0-9]+)?$' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.go_version_reader.outputs.go_version_output }}
+
+      - name: Get Git Version (Tag)
+        id: git_version
+        run: echo "version=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
+      - name: Build application
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          APP_VERSION: ${{ steps.git_version.outputs.version }}
+        run: ./.github/scripts/build_app.sh
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: cmd/nicksh/*.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

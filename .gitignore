@@ -31,3 +31,7 @@ cgo_import.go
 *.sys
 *.dylib
 coverage.out
+build/
+docker-compose.yaml
+Dockerfile
+.env*
