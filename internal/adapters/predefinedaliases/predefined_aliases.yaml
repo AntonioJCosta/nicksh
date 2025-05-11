@@ -1,5 +1,9 @@
 # This YAML file contains a list of predefined command aliases for various tasks.
 
+# Special Alias
+- command: "nicksh"
+  alias: "ni"
+
 # Git aliases
 
 - command: "git status"
