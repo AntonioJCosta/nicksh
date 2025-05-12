@@ -1,4 +1,4 @@
-name: Release Go CLI
+name: Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   call-test-workflow:
-    name: Run Tests via Reusable Workflow
+    name: Test
     uses: ./.github/workflows/test.yaml
 
   build:

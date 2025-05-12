@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/AntonioJCosta/nicksh)](https://goreportcard.com/report/github.com/AntonioJCosta/nicksh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/AntonioJCosta/nicksh)](https://github.com/AntonioJCosta/nicksh/releases/latest)
+[![Test](https://github.com/AntonioJCosta/nicksh/actions/workflows/test.yaml/badge.svg)](https://github.com/AntonioJCosta/nicksh/actions/workflows/test.yaml)
 
 Give your shell commands cool nicknames, and your fingers a break!
 
