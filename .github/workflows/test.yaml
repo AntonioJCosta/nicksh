@@ -1,4 +1,4 @@
-name: Reusable Go Test Workflow
+name: Test
 
 on:
   push:
